@@ -1,0 +1,2 @@
+# LF in the repository and in every checkout: the sync script compares bytes and records SHA-256 of files
+* text=auto eol=lf

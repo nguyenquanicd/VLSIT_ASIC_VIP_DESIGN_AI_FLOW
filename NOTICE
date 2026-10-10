@@ -1,0 +1,9 @@
+VLSIT ASIC VIP Design AI Flow
+Copyright 2026 the VLSIT ASIC VIP Design AI Flow authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party software: this repository does not distribute the Accellera UVM
+reference implementation. The scripts only call it, from a location chosen by
+the user, to type-check generated code. UVM (Accellera Systems Initiative,
+https://github.com/accellera-official/uvm-core) is licensed under Apache-2.0.

@@ -1,0 +1,6 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Run output of the flow
+*_vip_run_*/

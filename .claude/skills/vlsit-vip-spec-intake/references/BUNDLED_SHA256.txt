@@ -1,0 +1,14 @@
+# SHA-256 of files bundled from the repository source tree. Do not edit; run scripts/sync_skills.py.
+5286F25D0D85B0B30C438821AB2E727F16889A815A4FBA59F972A64FEAA2B059  scripts/vip_common.py  <- shared/scripts/vip_common.py
+1A88D01F463ECA15A00ADB02EE7FE694E9F166A2A0A4E5D4E6C1226ADE3ED86D  scripts/validate_vip_spec.py  <- shared/scripts/validate_vip_spec.py
+535F62C941A3A777D55DF2EB2EB32F93E96584EE2122FB724E392E4BB9E93340  scripts/trace_lint.py  <- shared/scripts/trace_lint.py
+413F0E694A82BCC9239754C5128C19693CA0C6CBA522C4116CB263013CCE9AAE  scripts/check_env.py  <- shared/scripts/check_env.py
+93B78CAB7EEAD237AEE61B84F598A7B62DD55545156514C6635DA4B7952243E1  scripts/spec_query.py  <- shared/scripts/spec_query.py
+3ADD63234AB69E7C3C941169937BE705FB13C98931154FEC66951C5C425B5B0E  scripts/rule_lookup.py  <- shared/scripts/rule_lookup.py
+7C5951284B09CAA4DDF614C88C4732F02E35E85B0BCACDC0BDDE5789C05D8568  scripts/stage_brief.py  <- shared/scripts/stage_brief.py
+23A35EC048776AB64664BFB057F1F207BC1F329974517A1F87DE7BD901B87D95  scripts/vip_state.py  <- shared/scripts/vip_state.py
+D24E6EF47A9E527978C4C267C521900B47B989D13E2D4E6E198C1B3335A61F2C  scripts/vip.py  <- shared/scripts/vip.py
+0A1B5BB138AC30D81F8E24B67252E538BF1BA3A0A0566889A8F2C02F7C3F6D48  references/VLSIT_VIP_Design_Rule.md  <- spec_template/VLSIT_VIP_Design_Rule.md
+5282A9683D8A8BF5EF3C614C9ACCFD0871DE9A24BE7E72DB7C079AF2CCED2280  references/artifact_contract.md  <- shared/references/artifact_contract.md
+ADF576509BDBA17330B400B393551A69BFBC9FED1385FA0DDB1860D40FE61CBD  references/VLSIT_ASIC_VIP_Specification_Template.md  <- spec_template/VLSIT_ASIC_VIP_Specification_Template.md
+B24EB88A3AAF47CB6D43B8788562E731AF12AF879F01A77310F1B1949F96285B  assets/APB_VIP_Specification.md  <- examples/apb/APB_VIP_Specification.md

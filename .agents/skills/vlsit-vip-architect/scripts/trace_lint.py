@@ -173,6 +173,8 @@ def lint_impl(rows: list[dict], vip_dir: Path, tag: str, rep: vc.Report, stage: 
         rel = p.relative_to(vip_dir).as_posix()
         if "\t" in t:
             rep.error("HY-01", f"{rel}: tab character found (VFIL-04, VP-16)")
+        if re.search(r"^(<{7} |>{7} )", t, re.M):
+            rep.error("HY-09", f"{rel}: unresolved merge conflict marker (resolve the port conflicts)")
         for n, line in enumerate(t.splitlines(), 1):
             m = re.match(r"^\s*//(.*)$", line)
             if m and len(line.rstrip()) > 100:

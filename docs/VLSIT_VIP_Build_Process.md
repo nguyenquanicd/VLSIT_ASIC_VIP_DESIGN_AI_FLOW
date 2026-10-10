@@ -380,3 +380,62 @@ Chưa chạy (`NOT_RUN`): **mô phỏng** các class UVM (không có simulator U
 ### Tính năng giảm token (đã thêm ở bản 0.2)
 
 Lệnh `vip` nhận biết run; đầu ra gọn mặc định (gom theo mã, ba ví dụ mỗi mã, rút gọn đường dẫn run); `vip scaffold` điền sẵn các bảng theo rule; `vip query` đọc theo bảng hoặc ID; `vip rules` in đúng nhóm rule; `vip brief` cho mỗi stage; biểu thức check nằm trong spec (Mục 8.1) nên assertion được sinh hoàn chỉnh và được duyệt ở Gate 1; test qualification được sinh hoàn chỉnh, chỉ phải viết task stimulus của counterpart; `vip worklist` và `vip impl-check`; `vip check-vip`. Đo trên ví dụ APB: lượng văn bản đọc ở đầu stage giảm khoảng 84% (303 K còn 50 K ký tự). Chi tiết trong README của repository.
+
+
+## Phụ lục B. Vòng đời sau phát hành: reverse, bugfix, feature
+
+Các Mục 2 đến 7 mô tả việc xây một VIP mới. Phụ lục này mô tả ba quy trình bổ sung, nằm trong cùng flow (cùng thư mục run, lệnh `vip`, gate và quy tắc bằng chứng): phân tích code VIP có sẵn để sinh spec (**reverse**), sửa lỗi VIP (**bugfix**) và thêm tính năng theo yêu cầu của người dùng (**feature**). Chọn chế độ bằng `vip init <root> <tag> --mode new|reverse|bugfix|feature`.
+
+### B.1 Bốn chế độ
+
+| Chế độ | Điểm xuất phát | Kết quả | Gate |
+|---|---|---|---|
+| `new` | Spec VIP hoặc standard | VIP đã phát hành | G1, G2, G3, G4 |
+| `reverse` | Thư mục code VIP (`--code`) | Spec as-built và code được nhận làm cây nền | G1 |
+| `bugfix` | Run gốc (`--base-run`) | Bản vá (patch +1), bằng chứng được mang sang cho trace không bị ảnh hưởng | G1, G2 mang từ run gốc; G3, G4 |
+| `feature` | Run gốc (`--base-run`) | Bản minor (hoặc major), delta spec, port, re-qualify chọn lọc | G1 (delta), G2, G3, G4 |
+
+Run gốc không bao giờ bị sửa. Run thay đổi chép những gì nó cần và ghi thêm `00_change/`, `00_base/base.json`, hoặc `00_code/`.
+
+### B.2 Reverse: từ code sang spec
+
+1. `vip inventory` quét từ vựng (không cần simulator, không sửa code): signal, tham số, assertion, covergroup, class theo vai trò (agent, driver, monitor, sequencer, item, config, sequence, ...), field cấu hình, message, TODO.
+2. `vip from-code` soạn spec theo template: bảng signal, tham số, item, knob, capability, monitor, và mỗi assertion có nhãn thành một requirement kèm biểu thức Mục 8.1.
+3. Mọi ô suy ra từ code ghi **UNVERIFIED** và con trỏ `CODE:<file>:<line>:<label>`. Code là bằng chứng về điều VIP đang làm, không phải về điều standard yêu cầu: hành vi trái standard là *phát hiện* (finding), không phải requirement.
+4. Người review đối chiếu từng dòng với standard, điền điều khoản, strength, biên, injection, quyết định; bỏ chữ UNVERIFIED nhưng giữ con trỏ CODE để `vip verify-code` phát hiện lệch về sau.
+5. Gate 1 từ chối spec còn UNVERIFIED (`--allow-unverified` cần ghi chú liệt kê phần còn lại). `vip adopt` nhận code làm cây nền cho các run sau. Code không do flow sinh có layout `external`: không có plan, kiến trúc, cây sinh tự động; Gate 2 không áp dụng; bằng chứng là báo cáo regression của project.
+
+### B.3 Bugfix
+
+1. Mỗi lỗi là một dòng trong `00_change/bug_log.csv`: triệu chứng, mức độ, lớp (`vip`, `trace`, `counterpart`, `environment`, `dut`, `spec`).
+2. Trạng thái `open → analyzed → planned → fixed → verified → closed` chỉ chuyển khi có bằng chứng: lớp lỗi, requirement/file bị ảnh hưởng, **test hồi quy có tên (viết trước khi sửa)**, file log tồn tại, test nằm trong cây. Lỗi lớp `dut` là `wontfix`; lỗi lớp `spec` chuyển sang run feature.
+3. `vip carry-gates` mang Gate 1 và 2 từ run gốc khi file đã duyệt giống hệt (so SHA-256) và người dùng đồng ý.
+4. Sửa nhỏ nhất đủ giải thích triệu chứng; không refactor; không sửa `base/`.
+5. `vip impact` so cây đã sửa với cây gốc; `vip carry` giữ PASS của trace không bị ảnh hưởng; `vip qual-run --impacted` chỉ chạy phần còn lại; test hồi quy của lỗi trở thành một entry bằng chứng (`kind: reg`).
+
+### B.4 Feature
+
+1. `00_change/change_request.md`: yêu cầu, nguồn, tiêu chí chấp nhận, tương thích.
+2. Sửa bản chép spec trong run: dòng mới với ID mới (không dùng lại ID; requirement bị thay là `withdrawn`), biểu thức Mục 8.1, INJ cho check MUST, capability, knob có mặc định giữ hành vi cũ.
+3. `vip delta` liệt kê dòng thêm, bỏ, đổi theo từng bảng và gợi ý bump version (major nếu bỏ hoặc đổi interface; minor nếu thêm). Người dùng duyệt **delta** ở Gate 1, không phải cả spec mới.
+4. `vip plan`, `vip config`, Gate 2; rồi `vip port`: sinh lại skeleton của cấu hình cũ (tổ tiên chung) và của cấu hình mới, merge ba chiều với cây hiện tại bằng `git merge-file`: code viết tay được giữ, phần sinh mới được thêm, chồng lấn thành dấu xung đột (kiểm HY-09).
+5. Chỉ cài đặt các stub mới (`vip worklist`), rồi `vip impact`, `vip carry`, `vip qual-run --impacted`, Gate 3 và Gate 4.
+
+### B.5 Phạm vi tác động (`vip impact`)
+
+| File thay đổi | Phạm vi | Chạy lại |
+|---|---|---|
+| Một khối check trong `<tag>_checker.sv` | Chọn lọc | trace đúng và sai của check đó |
+| Một sequence trong `seq_lib/` | Chọn lọc | trace của requirement dùng sequence |
+| Một task stimulus trong counterpart, hoặc một test | Chọn lọc | test đó |
+| Class coverage | Coverage | thu lại coverage; bằng chứng pass/fail không đổi |
+| Interface, check package, `base/`, agent, driver, monitor, item, config, package, hoặc code ngoài các khối trên | Toàn bộ | mọi trace |
+| Tài liệu, filelist, bản chép spec, chuỗi version; phần đăng ký sinh tự động chỉ tăng thêm (số check, chỉ số, enum injection, include test) | Không / chọn lọc | không có / chỉ phần mới |
+
+Đo trên ví dụ APB: thêm một check MUST mới cho 2 trace chạy lại trên 25; sửa một thông điệp check cho 3 trace (có test hồi quy) trên 24; thay đổi ở lớp dùng chung chạy lại tất cả.
+
+### B.6 Trạng thái kiểm chứng của phần bổ sung
+
+Đã chạy (`python3 scripts/selftest.py`, simulator giả cho phần chạy): bug log và các chặn chuyển trạng thái; mang gate; impact chọn lọc; carry bằng chứng; chạy lại chỉ trace bị ảnh hưởng; delta spec; port giữ code viết tay và thêm skeleton mới không xung đột; inventory, draft spec, verify-code và từ chối Gate 1 khi còn UNVERIFIED trên cây APB đã sinh; quét `tvip-axi` (101 file, 132 class) bằng inventory và draft; layout `external`. Chạy tay (ngoài selftest): `check-vip` (Verilator lint ở hai chế độ và kiểm kiểu UVM bằng slang với UVM 2020.3.1) trên cây APB đã port: PASS, 0 lỗi; một sửa tay chạm đúng dòng mà skeleton mới đổi tạo ra dấu xung đột, `vip port` thoát mã 1 và `lint impl` báo HY-09.
+
+Chưa chạy (`NOT_RUN`): mô phỏng bằng simulator UVM thật; port trên VIP lớn nhiều chỉnh sửa tay; phân tích code có macro hoặc generate phức tạp (quét từ vựng có thể bỏ sót); suy diễn spec từ class-level check (cần đọc tay).

@@ -39,6 +39,7 @@ if a.cmd == "run":
     print("UVM_FATAL :    0")
 '''
 
+NL = chr(10)
 results: list[tuple[str, str, str]] = []
 
 
@@ -55,6 +56,130 @@ def run(args: list[str], cwd: Path | None = None, env: dict | None = None) -> tu
 
 def vip(run_dir: Path, *a: str, env: dict | None = None) -> tuple[int, str]:
     return run([str(VIP), "--run", str(run_dir), *a], env=env)
+
+
+def last_line(out: str) -> str:
+    lines = [x for x in out.strip().splitlines() if x.strip()]
+    return lines[-1] if lines else ""
+
+
+def new_run(tmp: Path, mode: str, base: Path, *extra: str) -> Path | None:
+    rc, out = run([str(VIP), "init", str(tmp), "apb", "--mode", mode, "--base-run", str(base), *extra])
+    return Path(last_line(out)) if rc == 0 else None
+
+
+def change_runs(tmp: Path, base: Path) -> None:
+    """Bugfix, feature, and reverse runs on top of the finished APB base run (synthetic simulator)."""
+    (base / "05_qual" / "qualification_report.md").write_text("selftest placeholder" + NL, encoding="utf-8")
+    vip(base, "gate", "G3", "APPROVED", "--by", "selftest")
+    tree = base / "04_vip" / "apb_vip"
+    # a hand-written line in the base tree must survive a feature port
+    drv = tree / "uvm" / "apb_driver_host.sv"
+    drv.write_text(drv.read_text(encoding="utf-8").replace("endclass", "  // HAND-WRITTEN selftest marker" + NL + "endclass", 1),
+                   encoding="utf-8", newline=NL)
+
+    # ---- bugfix
+    bf = new_run(tmp, "bugfix", base)
+    step("bugfix run starts from the base run (patch version bumped)", bf is not None)
+    if bf is None:
+        return
+    rc, out = vip(bf, "bug", "new", "--title", "pstrb message", "--symptom", "wrong message", "--severity", "minor", "--req", "VREQ-APB-0004")
+    rc2, out2 = vip(bf, "bug", "set", "BUG-001", "status=planned")
+    step("bug log refuses a state skip and an unclassified bug", rc == 0 and rc2 == 1)
+    vip(bf, "bug", "set", "BUG-001", "class=vip", "status=analyzed")
+    vip(bf, "bug", "set", "BUG-001", "files=rtl_if/apb_checker.sv", "status=planned")
+    rc, out = vip(bf, "bug", "set", "BUG-001", "status=fixed")
+    step("bug log refuses fixed without a regression test", rc == 1 and "regression test" in out)
+    rc, out = vip(bf, "carry-gates", "--by", "selftest")
+    step("Gates 1 and 2 carried to the bugfix run (files identical)", rc == 0 and "G1, G2" in out, last_line(out))
+    chk = bf / "04_vip" / "apb_vip" / "rtl_if" / "apb_checker.sv"
+    text = chk.read_text(encoding="utf-8")
+    chk.write_text(text.replace("pstrb is not low during a read transfer", "pstrb is not zero during a read transfer"), encoding="utf-8", newline=NL)
+    tests = bf / "04_vip" / "apb_vip" / "qual" / "tests"
+    shutil.copyfile(tests / "qual_apb_errm_pstrb_rd_low_neg.sv", tests / "qual_bug001_msg.sv")
+    vip(bf, "bug", "set", "BUG-001", "regression_test=qual_bug001_msg", "fix_summary=message", "status=fixed")
+    rc, out = vip(bf, "impact")
+    step("impact of a fixed check message and its regression test: selective, 3 of 24 traces", rc == 0 and "SELECTIVE" in out and "re-run 3 of 24" in out, last_line(out)[:70])
+    rc, out = vip(bf, "carry")
+    step("evidence carried: 42 PASS carried, 6 to run (4 impacted + 2 regression-test entries)", rc == 0 and "carried 42" in out and "2 regression-test" in out, last_line(out)[:70])
+    rc, out = vip(bf, "qual-run", "--impacted")
+    rc2, out2 = vip(bf, "qual-collect")
+    step("only the impacted traces re-run; evidence complete (48 PASS)", rc == 0 and "12 run" in out and rc2 == 0 and "'PASS': 48" in out2, last_line(out)[:60])
+    log = next((bf / "05_qual" / "logs").glob("*.log"), None)
+    rc, out = vip(bf, "bug", "set", "BUG-001", f"evidence_log={log.relative_to(bf).as_posix()}", "status=verified") if log else (1, "no log")
+    rc2, out2 = vip(bf, "bug", "set", "BUG-001", "status=closed")
+    step("bug verified from a log and closed with its regression test in the tree", rc == 0 and rc2 == 0, last_line(out2))
+
+    # ---- feature
+    ft = new_run(tmp, "feature", base)
+    step("feature run starts from the base run (minor version bumped)", ft is not None)
+    if ft is None:
+        return
+    rc, out = vip(ft, "next")
+    step("feature run asks for the change request first", rc == 0 and "change request" in out)
+    (ft / "00_change" / "change_request.md").write_text(
+        "# Change request" + NL + "## Title" + NL + "penable needs psel" + NL + "## Requirement from the user" + NL + "Flag penable while psel is low." + NL
+        + "## Motivation and source" + NL + "APB operating states." + NL + "## Acceptance" + NL + "A new MUST check." + NL
+        + "## Compatibility" + NL + "Defaults unchanged." + NL, encoding="utf-8")
+    spec = ft / "01_spec" / "apb_vip_spec.md"
+    s = spec.read_text(encoding="utf-8")
+    row = ('| VREQ-APB-0016 | MUST | M | SEQ | The host shall keep psel high in every cycle in which penable is high. | '
+           'REF-001 "Operating states: SETUP and ACCESS" | all | penable, psel | PENABLE_PSEL | SVA | auto | - | - |' + NL)
+    i = s.index("| VREQ-APB-0009 | MUST | M | SEQ |")
+    j = s.index(NL, i)
+    s = s[:j + 1] + row + s[j + 1:]
+    s = s.replace("| VREQ-APB-0009 | NEXT |", "| VREQ-APB-0016 | SAME | penable | psel | penable is high while psel is low |" + NL + "| VREQ-APB-0009 | NEXT |", 1)
+    s = s.replace("| INJ-009 |", "| INJ-010 | M | Assert penable while psel is low | item field inj_kind = APB_INJ_PENABLE_NOPSEL | VREQ-APB-0016 | auto |" + NL + "| INJ-009 |", 1)
+    spec.write_text(s, encoding="utf-8", newline=NL)
+    rc, out = vip(ft, "validate")
+    step("updated specification validates", rc == 0, last_line(out))
+    rc, out = vip(ft, "delta")
+    step("spec delta: 1 requirement, 1 expression, 1 injection added; bump minor", rc == 0 and "requirements +1" in out and "checkexpr +1" in out and "minor" in out, last_line(out)[:70])
+    vip(ft, "gate", "G1", "APPROVED", "--by", "selftest")
+    rc, out = vip(ft, "plan")
+    rc2, out2 = vip(ft, "config")
+    (ft / "03_arch" / "vip_arch.md").write_text("selftest placeholder" + NL, encoding="utf-8")
+    vip(ft, "gate", "G2", "APPROVED", "--by", "selftest")
+    step("feature plan and configuration: 16 requirements, 10 checks", rc == 0 and "16 requirement" in out and rc2 == 0 and "10 check" in out2)
+    rc, out = vip(ft, "port")
+    step("port keeps hand-written code and adds the new skeleton without conflict", rc == 0 and "conflict" not in out.replace("conflict 0", ""), last_line(out)[:70])
+    kept = (ft / "04_vip" / "apb_vip" / "uvm" / "apb_driver_host.sv").read_text(encoding="utf-8")
+    step("hand-written line survived the port", "HAND-WRITTEN selftest marker" in kept)
+    rc, out = vip(ft, "lint", "impl")
+    step("no merge conflict marker left (HY-09 clean)", "HY-09" not in out)
+    rc, out = vip(ft, "impact")
+    step("impact of a new check: selective, 2 of 25 traces", rc == 0 and "SELECTIVE" in out and "re-run 2 of 25" in out, last_line(out)[:70])
+    rc, out = vip(ft, "carry")
+    step("evidence carried from the base for untouched traces", rc == 0 and "carried 46" in out, last_line(out)[:70])
+    rc, out = vip(ft, "qual-run", "--impacted")
+    rc2, out2 = vip(ft, "qual-collect")
+    step("only the 4 new entries run; evidence has 50 PASS", rc == 0 and "8 run" in out and "'PASS': 50" in out2, last_line(out)[:60])
+
+    # ---- reverse (the generated tree is read as if it were external code) and external bugfix
+    rv = tmp / "reverse_root"
+    rc, out = run([str(VIP), "init", str(rv), "apb", "--mode", "reverse", "--code", str(tree)])
+    rvr = Path(last_line(out)) if rc == 0 else None
+    step("reverse run starts on a code directory", rvr is not None)
+    if rvr is None:
+        return
+    rc, out = vip(rvr, "inventory")
+    step("inventory scan: 9 assertions found", rc == 0 and "assertions 9" in out, "lexical scan")
+    rc, out = vip(rvr, "from-code", "--title", "APB", "--standard", "AMBA APB (revision to confirm)")
+    step("draft specification: 13 signals, 9 requirements, 9 expressions", rc == 0 and "13 signal" in out and "9 requirement" in out and "9 check expression" in out, last_line(out)[:90])
+    rc, out = vip(rvr, "verify-code")
+    step("CODE pointers resolve (no drift)", rc == 0, last_line(out)[:70])
+    rc, out = vip(rvr, "gate", "G1", "APPROVED", "--by", "selftest")
+    step("Gate 1 refuses a specification with UNVERIFIED marks", rc == 1 and "UNVERIFIED" in out)
+    vip(rvr, "gate", "G1", "APPROVED", "--by", "selftest", "--allow-unverified", "--note", "selftest only")
+    rc, out = vip(rvr, "adopt")
+    step("code adopted as the base tree (layout external)", rc == 0 and "external" in out, last_line(out)[-40:])
+    eb = new_run(tmp, "bugfix", rvr)
+    step("bugfix run on external code starts", eb is not None)
+    if eb is not None:
+        rc, out = vip(eb, "lint", "impl")
+        step("generated-layout commands are refused for external code", rc != 0 and "external" in out)
+        rc, out = vip(eb, "status")
+        step("Gate 2 does not apply to external code", rc == 0 and "G2" not in out, last_line(out)[:70])
 
 
 def main() -> int:
@@ -102,7 +227,7 @@ def main() -> int:
     (runp / "03_arch" / "vip_arch.md").write_text("selftest placeholder\n", encoding="utf-8")
     vip(runp, "gate", "G2", "APPROVED", "--by", "selftest")
     rc, out = vip(runp, "gen")
-    step("VIP generated (64 files)", rc == 0 and "64 file" in out)
+    step("VIP generated (65 files)", rc == 0 and "65 file" in out)
     rc, out = vip(runp, "lint", "impl")
     step("trace lint (impl): 0 errors with checks generated from the specification", rc == 0, "stubs remain as warnings")
     vip(runp, "qual-init")
@@ -117,6 +242,7 @@ def main() -> int:
     step("collector sets PASS only from logs (46 entries)", rc == 0 and "'PASS': 46" in out)
     rc, out = vip(runp, "lint", "qual")
     step("qual lint still fails while stubs and evidence items are missing", rc == 1)
+    change_runs(tmp, runp)
 
     rc, out = run([str(SHARED / "check_env.py"), "--json", *(["--uvm-home", args.uvm_home] if args.uvm_home else [])], env=env)
     info = json.loads(out) if rc == 0 else {}

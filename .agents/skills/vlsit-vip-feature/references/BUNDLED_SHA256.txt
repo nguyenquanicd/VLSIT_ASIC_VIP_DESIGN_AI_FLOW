@@ -1,0 +1,16 @@
+# SHA-256 of files bundled from the repository source tree. Do not edit; run scripts/sync_skills.py.
+5286F25D0D85B0B30C438821AB2E727F16889A815A4FBA59F972A64FEAA2B059  scripts/vip_common.py  <- shared/scripts/vip_common.py
+1A88D01F463ECA15A00ADB02EE7FE694E9F166A2A0A4E5D4E6C1226ADE3ED86D  scripts/validate_vip_spec.py  <- shared/scripts/validate_vip_spec.py
+0C447DEC0A1D8985C1DC821DCF247564121095FACBEF56392C2BDAF5D49DCD75  scripts/trace_lint.py  <- shared/scripts/trace_lint.py
+413F0E694A82BCC9239754C5128C19693CA0C6CBA522C4116CB263013CCE9AAE  scripts/check_env.py  <- shared/scripts/check_env.py
+93B78CAB7EEAD237AEE61B84F598A7B62DD55545156514C6635DA4B7952243E1  scripts/spec_query.py  <- shared/scripts/spec_query.py
+3ADD63234AB69E7C3C941169937BE705FB13C98931154FEC66951C5C425B5B0E  scripts/rule_lookup.py  <- shared/scripts/rule_lookup.py
+6A6E07460B342A087DCE269E9BC22F6B02E3ACD87116FF6DFA8D4D2023BC8BA2  scripts/stage_brief.py  <- shared/scripts/stage_brief.py
+F06DDF1BCF107401A786F446F4A0BA336EBCE74C1C02D1181B72B1C25CE812D7  scripts/vip_state.py  <- shared/scripts/vip_state.py
+7A7E137B27E6E464DC92D4FB5AF8361492726B6FD2742B54DA6E3AD29AD60211  scripts/spec_scaffold.py  <- shared/scripts/spec_scaffold.py
+447184C87260FA600B443FA45B67B4BE983EF0AB49898224AACA8C196A0C0973  scripts/vip_impact.py  <- shared/scripts/vip_impact.py
+C9D3F7A9E278BAF91C3EDD4B783091E6A2B0936DC842F0C0022E763DE04D2472  scripts/vip_change.py  <- shared/scripts/vip_change.py
+ED806FE1A7EBFFBCABE2E2AADB5F08E568542DA2294C9E39757923D197778D91  scripts/vip.py  <- shared/scripts/vip.py
+0A1B5BB138AC30D81F8E24B67252E538BF1BA3A0A0566889A8F2C02F7C3F6D48  references/VLSIT_VIP_Design_Rule.md  <- spec_template/VLSIT_VIP_Design_Rule.md
+436E55B48C16CF73A60EE126894E3D3038AE8A895277ADCC42CF36679672EC28  references/artifact_contract.md  <- shared/references/artifact_contract.md
+ADF576509BDBA17330B400B393551A69BFBC9FED1385FA0DDB1860D40FE61CBD  references/VLSIT_ASIC_VIP_Specification_Template.md  <- spec_template/VLSIT_ASIC_VIP_Specification_Template.md

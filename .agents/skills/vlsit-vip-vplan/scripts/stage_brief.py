@@ -98,6 +98,90 @@ BRIEFS = {
  "gate": "Do you approve release <version> for <spec_rev>, including the listed files, variants, waivers, and limitations? Reply APPROVE, REVISE, or STOP."},
 }
 
+# Mode overrides: a run started with --mode reverse|bugfix|feature replaces the fields it names.
+OVERRIDES = {
+"reverse": {
+"S0": {"title": "Inventory of the existing code (skill vlsit-vip-code-analyzer)",
+       "goal": "A machine-made index of the code: interface, assertions, classes with roles, config, messages, TODOs.",
+       "do": ["vip init <root> <tag> --mode reverse --code <dir>   (once)",
+              "vip inventory   (lexical scan, no simulator; writes 00_code/inventory.json)",
+              "vip inventory summary   then   vip inventory show assertion|class|covergroup --limit 20   as needed"],
+       "rules": ["VNAM"], "done": "inventory.json exists; the summary shows the interface and the classes by role.", "gate": None},
+"S1": {"title": "As-built specification (skill vlsit-vip-code-analyzer)",
+       "goal": "Draft the specification from the code, then verify every inferred cell; Gate 1.",
+       "do": ["vip from-code --title \"<name>\" --standard \"<id rev>\"   (draft; every inferred cell says UNVERIFIED and gives CODE:<file>:<line>)",
+              "For each UNVERIFIED mark: open only the CODE region, confirm or correct the row, remove the mark. The code is the evidence, not the truth: a behavior that contradicts the standard is a finding, not a requirement.",
+              "Fill what the code cannot show: standard references, strengths, roles, profiles, decisions DEC-nnn (open questions to the user).",
+              "vip verify-code   (CODE pointers resolve; reports marks left)   then   vip validate"],
+       "rules": ["VNAM", "VCHK"], "done": "verify-code and validate exit 0; no UNVERIFIED mark remains (or each is listed in the Gate note).",
+       "gate": "Do you approve the as-built specification <file>, including the open decisions and the listed findings? Reply APPROVE, REVISE, or STOP."},
+"S2": {"title": "Adopt the code (skill vlsit-vip-code-analyzer)",
+       "goal": "Make the code the base tree of later bugfix and feature runs.",
+       "do": ["vip adopt   (copies the code into 04_vip/<tag>_vip; never overwrites)",
+              "Start the next run: vip init <root> <tag> --mode bugfix|feature --base-run <this run>"],
+       "rules": [], "done": "04_vip/<tag>_vip exists.", "gate": None},
+},
+"bugfix": {
+"S0": {"title": "Defect intake (skill vlsit-vip-bugfix)",
+       "goal": "Every defect is a row in the bug log with a symptom and a severity.",
+       "do": ["vip bug new --title \"...\" --symptom \"...\" --severity critical|major|minor [--found-in VER] [--req VREQ-..]",
+              "vip bug list"],
+       "rules": [], "done": "bug_log.csv has the defect(s).", "gate": None},
+"S1": {"title": "Root cause and classification (skill vlsit-vip-bugfix)",
+       "goal": "Find the cause before touching code; classify it; name what it affects.",
+       "do": ["Reproduce with the smallest stimulus; read only the code the symptom points to (vip query get <VREQ>, then the CODE region).",
+              "Decide the class: vip (VIP code), trace (wrong ID, expression, or evidence), counterpart (qual model), environment, dut (not a VIP bug: wontfix), spec (the spec is wrong: stop, start a feature run).",
+              "vip bug set BUG-nnn class=... status=analyzed   then   req_ids=... files=... status=planned",
+              "With the user's OK, carry the gates: vip carry-gates --by <NAME> (refused when an approved file differs)"],
+       "rules": ["VCHK", "VQUA"], "done": "every live bug is planned and Gates 1-2 are carried (Gate 1 only for external code).",
+       "gate": None},
+"S4": {"title": "Test first, then fix (skill vlsit-vip-bugfix)",
+       "goal": "A regression test that fails for the bug, a minimal fix, VIP-1 still true.",
+       "do": ["Write the regression test (or counterpart stimulus) first and watch it fail; set regression_test=<name> only then.",
+              "Fix the smallest region that explains the symptom; do not refactor; do not touch base/.",
+              "vip check-vip ; vip lint impl   (external code: the project's own build)",
+              "vip bug set BUG-nnn regression_test=<test> fix_summary=\"...\" status=fixed"],
+       "rules": ["VCHK", "VCOV", "VP"], "done": "every live bug is fixed; check-vip and lint impl pass.", "gate": None},
+"S5": {"title": "Selective re-qualification (skill vlsit-vip-bugfix)",
+       "goal": "Re-run only the traces the fix can affect; carry the rest; close the bugs with evidence.",
+       "do": ["vip impact   (what changed in 04_vip against the base: scope, checks, requirements, tests to re-run)",
+              "vip carry   (evidence from the base: PASS entries of untouched traces carried, the rest NOT_RUN)",
+              "vip qual-run --impacted ; vip qual-collect ; vip check-vip --record ; vip lint qual",
+              "vip bug set BUG-nnn evidence_log=<log> status=verified   (closed when the regression test is in the tree)",
+              "External code: run the project regression, write 05_qual/regression_report.md, same bug transitions."],
+       "rules": ["VQUA"], "done": "lint qual exits 0 (or the regression report is complete); bugs verified.",
+       "gate": "Do you approve the re-qualification evidence of <version>: <n> bug(s) fixed, <m> trace(s) re-run, <k> carried from <base>? Reply APPROVE, REVISE, or STOP."},
+"S6": {"title": "Fix release notes (skill vlsit-vip-bugfix)", "goal": "Release notes list each fix with the test that guards it.",
+       "do": ["vip bug report   (table for the notes)", "vip manifest ; vip lint release"], "rules": ["VDOC"],
+       "done": "release_notes.md lists bugs, tests, carried and re-run counts, and the patch version.", "gate": None},
+},
+"feature": {
+"S0": {"title": "Change request (skill vlsit-vip-feature)",
+       "goal": "The user's new requirement written down with source and acceptance.",
+       "do": ["Edit 00_change/change_request.md until no (fill) remains. Ask only what the base specification cannot answer.",
+              "vip query outline ; vip query rows requirements   (find the rows the change touches)"],
+       "rules": ["VSCP"], "done": "change_request.md complete.", "gate": None},
+"S1": {"title": "Specification update (skill vlsit-vip-feature)",
+       "goal": "The base specification, changed only where the request needs it; Gate 1 on the delta.",
+       "do": ["Add rows with new IDs (never reuse an ID; mark a replaced requirement withdrawn); new SVA rows need a Section 8.1 expression and an INJ row if MUST.",
+              "Default behavior must not change unless the request says so: a new option or knob defaults to the old behavior.",
+              "vip validate ; vip delta   (rows added, removed, changed per table; suggested version bump)"],
+       "rules": ["VNAM", "VCHK", "VAPI"], "done": "validate exits 0; the delta shows only what the request needs.",
+       "gate": "Do you approve specification <file> version N with this delta (<added>, <changed>, <removed>)? Reply APPROVE, REVISE, or STOP."},
+"S4": {"title": "Port and implement (skill vlsit-vip-feature)",
+       "goal": "The implemented VIP carried to the new configuration; only the new stubs are open.",
+       "do": ["vip port   (flow layout: skeletons of old and new configuration, three-way merge with your code; conflicts are marked)",
+              "Resolve conflicts, then vip worklist --n 5 for the new stubs only; implement; vip check-vip ; vip lint impl",
+              "External code: implement in the copied tree with its own build and style; vip impact --files <changed files>"],
+       "rules": ["VCHK", "VIFC", "VDRV", "VMON", "VSEQ", "VCOV"], "done": "no conflict marker; check-vip and lint impl pass.", "gate": None},
+"S5": {"title": "Selective re-qualification (skill vlsit-vip-feature)",
+       "goal": "New traces run; touched traces re-run; the rest carried from the base evidence.",
+       "do": ["vip impact ; vip carry", "vip worklist --kind test (new counterpart stimulus only)", "vip qual-run --impacted ; vip qual-collect ; vip check-vip --record ; vip lint qual"],
+       "rules": ["VQUA", "VP"], "done": "lint qual exits 0.",
+       "gate": "Do you approve the evidence of <version>: <n> new, <m> re-run, <k> carried from <base>? Reply APPROVE, REVISE, or STOP."},
+},
+}
+
 DISCIPLINE = ("Token discipline: run `vip` commands and read their short output; use `vip query` and `vip rules` instead of "
               "opening whole files; open a file region only when the worklist names it; do not echo generated files; "
               "never edit generated bundled files (base/).")
@@ -120,8 +204,11 @@ def main() -> int:
     b = BRIEFS[st]
     if a.run and (Path(a.run) / "vip_state.json").is_file():
         s = json.loads((Path(a.run) / "vip_state.json").read_text(encoding="utf-8"))
-        gates = " ".join(f"{g}:{i['status'][:4]}" for g, i in s["gates"].items())
-        print(f"run {s['run']}  stage {s['stage']}  gates {gates}")
+        mode = s.get("mode", "new")
+        light = s.get("layout", "flow") == "external"
+        gates = " ".join(f"{g}:{i['status'][:4]}" for g, i in s["gates"].items() if not (light and g == "G2"))
+        print(f"run {s['run']}  mode {mode}  stage {s['stage']}  gates {gates}")
+        b = {**b, **OVERRIDES.get(mode, {}).get(st, {})}
     print(f"{st}  {b['title']}")
     print(f"Goal: {b['goal']}")
     print("Do:")

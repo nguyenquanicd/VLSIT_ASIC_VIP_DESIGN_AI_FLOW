@@ -1,8 +1,8 @@
 # VLSIT ASIC VIP Design AI Flow / Quy trình AI thiết kế VIP cho ASIC
 
-Skills for Claude Code and Codex CLI that turn a protocol or standard specification into a qualified, documented, easy-to-use SystemVerilog/UVM Verification IP (VIP), with scripts that keep the agent's token use low.
+Skills for Claude Code and Codex CLI that turn a protocol or standard specification into a qualified, documented, easy-to-use SystemVerilog/UVM Verification IP (VIP), and that keep the VIP alive afterwards: analyze existing VIP code into a specification, fix VIP bugs, and add features from a user requirement. Scripts keep the agent's token use low.
 
-Bộ skill cho Claude Code và Codex CLI, biến spec của giao thức hoặc standard thành Verification IP (VIP) SystemVerilog/UVM đã qualify, có tài liệu và dễ dùng, kèm script giúp agent dùng ít token.
+Bộ skill cho Claude Code và Codex CLI, biến spec của giao thức hoặc standard thành Verification IP (VIP) SystemVerilog/UVM đã qualify, có tài liệu và dễ dùng; sau đó duy trì VIP: phân tích code VIP có sẵn để sinh spec, sửa lỗi VIP, và thêm tính năng theo yêu cầu của người dùng. Script giúp agent dùng ít token.
 
 ## Why this flow / Vì sao có flow này
 
@@ -18,11 +18,58 @@ The flow follows a process built from published protocol-VIP and checker-IP prac
 
 ## Flow / Quy trình
 
+One command, `vip init`, starts a run in one of four modes; every mode uses the same run directory, the same `vip` command, the same gates, and the same evidence rules. / Một lệnh `vip init` mở một run ở một trong bốn chế độ; mọi chế độ dùng chung thư mục run, lệnh `vip`, gate và quy tắc bằng chứng.
+
+### The VIP life cycle / Vòng đời của VIP
+
+```mermaid
+flowchart LR
+    STD["Standard or<br/>VIP specification"] --> NEW["<b>new</b> run<br/>S0 to S7"]
+    CODE["Existing VIP code<br/>no or stale spec"] --> REV["<b>reverse</b> run<br/>code to spec"]
+    NEW -->|"Gate 4: release"| BASE[("BASE RUN<br/>spec + VIP tree<br/>+ evidence")]
+    REV -->|"Gate 1 + vip adopt"| BASE
+    BASE --> BUG["<b>bugfix</b> run<br/>patch release"]
+    BASE --> FEAT["<b>feature</b> run<br/>minor release"]
+    BUG -->|"Gate 4"| BASE
+    FEAT -->|"Gate 4"| BASE
+    REQ["User requirement"] --> FEAT
+    DEF["Defect report"] --> BUG
+```
+
 ```text
-standard ──▶ S0/S1 intake ──▶ VIP spec (markdown template) ══ Gate 1 ══▶ S2 vPlan ──▶ S3 architecture ══ Gate 2 ══▶
-   S4 generate + implement ──(VIP-1 automatic check)──▶ S5 qualification ══ Gate 3 ══▶ S6/S7 release ══ Gate 4 ══▶ VIP
-                                   ▲                                                                       │
-                                   └────────────── spec change: requirement diff, re-qualify ◀─────────────┘
+ standard / spec ----> [ new run ] ---------------Gate 4--> released VIP --+
+                                                                           v
+ existing code ------> [ reverse run ]--Gate 1 + adopt--> BASE RUN (spec + tree + evidence)
+                                                                           |
+                       +---------------------------------------------------+
+                       v                                  v
+        defect --> [ bugfix run ]            requirement --> [ feature run ]
+                   patch x.y.z+1                              minor x.y+1.0
+                       |                                       |
+                       +----------- Gate 4 -> new base run <---+
+```
+
+| You have | Mode | Skill | Command | Result |
+|---|---|---|---|---|
+| A standard or a VIP specification | `new` | S0 to S7 stage skills | `vip init <root> <tag> <spec.md>` | A qualified, released VIP |
+| VIP code, no specification | `reverse` | `vlsit-vip-code-analyzer` | `vip init <root> <tag> --mode reverse --code <dir>` | An as-built specification (Gate 1) and the code adopted as a base |
+| A finished VIP and a defect | `bugfix` | `vlsit-vip-bugfix` | `vip init <root> <tag> --mode bugfix --base-run <run>` | A patch release; only touched traces re-run |
+| A finished VIP and a new requirement | `feature` | `vlsit-vip-feature` | `vip init <root> <tag> --mode feature --base-run <run>` | A minor release; delta, port, selective re-qualification |
+
+### New VIP (S0 to S7) / VIP mới
+
+```mermaid
+flowchart TD
+    A["S0-S1 intake<br/>standard to spec<br/>vlsit-vip-spec-intake"] --> G1{{"Gate 1<br/>specification"}}
+    G1 --> B["S2 vPlan and traceability<br/>vlsit-vip-vplan"]
+    B --> C["S3 architecture and API<br/>vlsit-vip-architect"]
+    C --> G2{{"Gate 2<br/>plan + architecture"}}
+    G2 --> D["S4 generate and implement<br/>vlsit-vip-generator"]
+    D --> V["VIP-1 automatic check<br/>vip check-vip, vip lint impl"]
+    V --> E["S5 qualification<br/>vlsit-vip-qualifier"]
+    E --> G3{{"Gate 3<br/>evidence"}}
+    G3 --> F["S6-S7 package, trial, release<br/>vlsit-vip-release"]
+    F --> G4{{"Gate 4<br/>release"}}
 ```
 
 | Stage | Skill | Output | Gate |
@@ -33,7 +80,71 @@ standard ──▶ S0/S1 intake ──▶ VIP spec (markdown template) ══ Ga
 | S4 | `vlsit-vip-generator` | the `<tag>_vip/` tree, implemented | VIP-1 automatic check |
 | S5 | `vlsit-vip-qualifier` | evidence matrix, logs, qualification report | Gate 3: evidence |
 | S6, S7 | `vlsit-vip-release` | README, trace report, manifest, release notes | Gate 4: release |
-| all | `vlsit-vip-flow` | run directory and state; routes the stages | enforces all gates |
+| all | `vlsit-vip-flow` | run directory and state; routes the stages and the modes | enforces all gates |
+
+### Existing VIP code to a specification (reverse) / Từ code VIP có sẵn sang spec
+
+```mermaid
+flowchart TD
+    C0["VIP code directory<br/>(never modified)"] --> I["vip inventory<br/>lexical scan: interface, assertions,<br/>classes by role, config, messages"]
+    I --> D["vip from-code<br/>draft spec in the template<br/>every inferred cell: UNVERIFIED + CODE pointer"]
+    D --> R["review each row against the<br/>standard and the code<br/>vip verify-code, vip validate"]
+    R --> F["findings: code stricter, weaker,<br/>or missing against the standard"]
+    R --> G1{{"Gate 1<br/>refused while UNVERIFIED remains"}}
+    G1 --> A["vip adopt<br/>the code becomes the base tree"]
+    A --> NEXT["next run: bugfix or feature"]
+```
+
+### Fix VIP bugs (bugfix) / Sửa lỗi VIP
+
+```mermaid
+flowchart TD
+    B0["vip bug new<br/>symptom, severity"] --> B1["reproduce, find root cause<br/>vip bug set class=... status=analyzed"]
+    B1 -->|"class spec"| FE["spec is wrong:<br/>start a feature run"]
+    B1 --> B2["plan: affected requirements, files<br/>status=planned"]
+    B2 --> CG["vip carry-gates<br/>Gates 1-2 from the base<br/>(files must be identical)"]
+    CG --> T["write the regression test first<br/>it must fail"]
+    T --> X["minimal fix<br/>vip check-vip, vip lint impl"]
+    X --> FX["status=fixed"]
+    FX --> IM["vip impact<br/>selective or full scope"]
+    IM --> CA["vip carry<br/>untouched PASS evidence kept"]
+    CA --> RQ["vip qual-run --impacted<br/>vip qual-collect"]
+    RQ --> VF["status=verified, then closed"]
+    VF --> G3{{"Gate 3<br/>evidence"}}
+    G3 --> RL["vip bug report, vip manifest<br/>patch version"]
+    RL --> G4{{"Gate 4<br/>release"}}
+```
+
+### Add features (feature) / Thêm tính năng
+
+```mermaid
+flowchart TD
+    Q["00_change/change_request.md<br/>requirement, source, acceptance,<br/>compatibility"] --> S["edit the spec copy<br/>new IDs, 8.1 expressions, INJ rows"]
+    S --> DL["vip validate, vip delta<br/>rows added, removed, changed;<br/>suggested version bump"]
+    DL --> G1{{"Gate 1<br/>approve the delta"}}
+    G1 --> PC["vip plan, vip config"]
+    PC --> G2{{"Gate 2"}}
+    G2 --> PT["vip port<br/>old skeleton, new skeleton, your code:<br/>3-way merge, conflicts marked"]
+    PT --> IMP["implement only the new stubs<br/>vip worklist, vip check-vip"]
+    IMP --> IM["vip impact + vip carry<br/>new and touched traces only"]
+    IM --> RQ["vip qual-run --impacted<br/>vip qual-collect, vip lint qual"]
+    RQ --> G3{{"Gate 3"}}
+    G3 --> RL["release notes with the delta<br/>vip manifest"]
+    RL --> G4{{"Gate 4<br/>minor release"}}
+```
+
+What makes a change run cheap and safe / Vì sao run thay đổi nhanh và an toàn:
+
+| Mechanism | Effect |
+|---|---|
+| Base run is read-only; a change run copies what it needs | The released VIP and its evidence are never altered |
+| `vip carry-gates` | Gates 1 and 2 are carried to a bugfix run only when the approved files are byte-identical to the base |
+| `vip delta` | The user approves a table-level delta (rows added, removed, changed), not a whole new specification |
+| `vip port` | Hand-written code survives a regeneration: three-way merge of the old skeleton, the new skeleton, and the current tree |
+| `vip impact` + `vip carry` + `vip qual-run --impacted` | Only traces that the change can affect are re-run; carried entries are labelled `carried:<run>/...`; shared-code changes re-run everything |
+| Bug log with gated states | `fixed` needs a named regression test, `verified` needs a log file, `closed` needs the test in the tree |
+| `UNVERIFIED` marks and `CODE:` pointers | Everything inferred from code is visible until a person checks it; Gate 1 refuses it |
+| Layout `external` | Code that this flow did not generate gets reverse, bugfix, and feature runs with Gates 1, 3, 4 and the project's regression report; generated-layout commands are refused instead of faked |
 
 ## Skills / Danh sách skill
 
@@ -48,6 +159,9 @@ Each skill has a Codex copy and a Claude Code copy with the same content. / Mỗ
 | vlsit-vip-generator | Generate and implement the VIP tree. / Sinh và hiện thực cây VIP. | [Codex](.agents/skills/vlsit-vip-generator/README.md) · [Claude](.claude/skills/vlsit-vip-generator/README.md) |
 | vlsit-vip-qualifier | Qualification evidence from logs. / Bằng chứng qualification từ log. | [Codex](.agents/skills/vlsit-vip-qualifier/README.md) · [Claude](.claude/skills/vlsit-vip-qualifier/README.md) |
 | vlsit-vip-release | Package, trial, release, and spec diff. / Đóng gói, chạy thử, phát hành và diff spec. | [Codex](.agents/skills/vlsit-vip-release/README.md) · [Claude](.claude/skills/vlsit-vip-release/README.md) |
+| vlsit-vip-code-analyzer | Existing VIP code to an as-built specification (reverse). / Từ code VIP có sẵn đến spec as-built. | [Codex](.agents/skills/vlsit-vip-code-analyzer/README.md) · [Claude](.claude/skills/vlsit-vip-code-analyzer/README.md) |
+| vlsit-vip-bugfix | Bug log, test-first fix, selective re-qualification, patch release. / Nhật ký lỗi, sửa theo test-first, re-qualify có chọn lọc, bản vá. | [Codex](.agents/skills/vlsit-vip-bugfix/README.md) · [Claude](.claude/skills/vlsit-vip-bugfix/README.md) |
+| vlsit-vip-feature | Spec delta, port of the implemented VIP, selective re-qualification, minor release. / Delta spec, port VIP đã cài đặt, re-qualify có chọn lọc, bản minor. | [Codex](.agents/skills/vlsit-vip-feature/README.md) · [Claude](.claude/skills/vlsit-vip-feature/README.md) |
 
 ## Setup / Cài đặt môi trường
 
@@ -62,7 +176,7 @@ Required: Python 3.11 or later (standard library only). Optional, used when foun
 
 UVM 2020.3.1 was chosen because it is the current Accellera release and the IEEE 1800.2-2020 reference; the base library and the generated code use the subset that UVM 1.2 shares.
 
-Check the whole repository at any time: `python3 scripts/selftest.py` (about 15 seconds).
+Check the whole repository at any time: `python3 scripts/selftest.py` (about 30 seconds).
 
 ## Skill locations and installation / Vị trí skill và cách cài
 
@@ -72,13 +186,19 @@ Check the whole repository at any time: `python3 scripts/selftest.py` (about 15 
 | Claude Code | `.claude/skills/<skill-name>/` | `$HOME/.claude/skills/<skill-name>/` |
 
 1. **Use this repository directly.** Open it in Claude Code or Codex CLI; each tool discovers its own folder. Restart Codex if a new skill does not appear. / Mở repository trực tiếp; mỗi công cụ tự nhận diện thư mục của nó.
-2. **Copy all seven skills** into the target project (keep each folder whole). The flow skill routes to the others. / Chép đủ bảy skill vào project đích, giữ nguyên từng thư mục.
+2. **Copy all ten skills** into the target project (keep each folder whole). The flow skill routes to the others. / Chép đủ mười skill vào project đích, giữ nguyên từng thư mục.
 3. **Claude Code, one session from elsewhere:** `claude --add-dir <this repository>`.
 4. **Codex from GitHub:** `$skill-installer Install vlsit-vip-flow from <OWNER>/<REPOSITORY>, path .agents/skills/vlsit-vip-flow` (repeat for each skill).
 
 Invoke: Claude Code `/vlsit-vip-flow ...`; Codex CLI `$vlsit-vip-flow ...`. Both can also select a skill from the request text.
 
     /vlsit-vip-flow Build a VIP from <SPEC_FILE>. Output root: <OUTPUT_ROOT>. Project: <PROJECT>. Author: <NAME>. Simulator: <SIMULATOR>. Stop at each gate for my approval.
+
+The other modes (Codex: replace `/` by `$`):
+
+    /vlsit-vip-code-analyzer Analyze the VIP code in <CODE_DIR> and write its specification. Tag: <TAG>. Standard: <STANDARD, REVISION>. Output root: <OUTPUT_ROOT>.
+    /vlsit-vip-bugfix Fix this VIP defect in <BASE_RUN>: <SYMPTOM>. Output root: <OUTPUT_ROOT>. Write the regression test first.
+    /vlsit-vip-feature Add this requirement to the VIP of <BASE_RUN>: <REQUIREMENT>. Output root: <OUTPUT_ROOT>. Stop at each gate for my approval.
 
 ## The `vip` command / Lệnh `vip`
 
@@ -89,6 +209,13 @@ Every skill bundles `scripts/vip.py`, a run-aware command: it finds the run dire
     vip next                                vip config              vip check-vip
     vip brief S4                            vip query rows requirements ...   vip qual-init / qual-run / qual-collect
     vip rules VCHK VIFC                     vip gate G1 APPROVED --by ".."    vip manifest / lint release
+
+Change runs and existing code:
+
+    vip init <root> axi --mode reverse --code <dir>       vip inventory / vip from-code / vip verify-code / vip adopt
+    vip init <root> apb --mode bugfix --base-run <run>    vip bug new|set|list|report    vip carry-gates --by ".."
+    vip init <root> apb --mode feature --base-run <run>   vip delta    vip port
+    (bugfix and feature)                                  vip impact    vip carry    vip qual-run --impacted
 
 `vip` stands for `python3 scripts/vip.py` in a skill folder; `python3 scripts/vip.py help` lists every command.
 
@@ -120,10 +247,10 @@ The input is a VIP specification in [VLSIT_ASIC_VIP_Specification_Template.md](s
 |---|---|
 | `spec_template/` | The input template, the VIP design rules (`V...` rule IDs), and a README |
 | `shared/` | Single source of the files that skills bundle: scripts and reference documents |
-| `.claude/skills/`, `.agents/skills/` | The seven skills for Claude Code and Codex CLI |
+| `.claude/skills/`, `.agents/skills/` | The ten skills for Claude Code and Codex CLI |
 | `scripts/` | `sync_skills.py` (copies shared files into the skills and mirrors Claude to Codex; `--check` reports drift) and `selftest.py` |
 | `examples/apb/` | A filled APB specification (worked example) |
-| `docs/` | The build process and the research evidence (Vietnamese) |
+| `docs/` | The build process (Appendix B: reverse, bugfix, feature) and the research evidence (Vietnamese) |
 
 Edit shared files in `shared/`, `spec_template/`, or `examples/`; edit skill-specific files in `.claude/skills/<skill>/`; then run `python3 scripts/sync_skills.py`. Do not edit the bundled copies inside a skill or the `.agents` folder by hand.
 
@@ -138,6 +265,10 @@ Measured on 2026-10-10 with Python 3.11, Verilator 5.053, slang 12.0.0, and Acce
 | Interface and checker lint (Verilator `-Wall`), simulation and formal modes | PASS, 0 warnings, with the 9 APB checks generated from the specification |
 | UVM type-check of the generated tree against UVM 2020.3.1 with slang: base library, agent, driver, monitor, coverage, sequences, quickstart, 23 qualification test classes | PASS, 0 errors; deliberate API mistakes were caught |
 | Runner and collector logic, qualification and release lint, manifest, spec diff | Run against a synthetic simulator and fixtures; they prove the script logic only |
+| Reverse run: inventory, draft specification, `verify-code`, Gate 1 refusal while `UNVERIFIED` remains, adoption | Run on the generated APB tree (9 assertions, 13 signals, 9 requirements, 9 expressions drafted) and on an external UVM VIP of 101 files and 132 classes (inventory and draft only) |
+| Bugfix run: gated bug states, carried gates, impact (selective, 3 of 24 traces), carried evidence (42 PASS), re-run of the impacted traces only | Run end to end on the APB base run with the synthetic simulator; proves the script logic only |
+| Feature run: change request, spec delta, plan, port with a hand-written line kept, impact (selective, 2 of 25 traces), carried evidence (46 PASS), re-run of the 4 new entries | Same; the ported tree passes `check-vip` (Verilator lint, slang UVM type-check); a deliberate overlapping edit produced conflict markers and HY-09 |
+| External layout: generated-layout commands refused, Gate 2 not applicable | Run (bugfix run on adopted code) |
 
 What was **not** run and is `NOT_RUN`:
 
@@ -147,6 +278,9 @@ What was **not** run and is `NOT_RUN`:
 
 ## Known limitations / Hạn chế
 
+- The code scan is lexical: it can miss constructs produced by macros or generate blocks, and it does not resolve inheritance across files it did not scan. A spec drafted from code is a draft: every inferred cell stays `UNVERIFIED` until a person checks it against the standard.
+- `vip port` needs `spec/vip_generation.json`, which the generator writes; a VIP built before that file existed, or not built by this flow, is changed in place (layout `external`: Gates 1, 3, 4, the project's regression report, `vip impact --files`).
+- `vip impact` is conservative: a change outside a check block, a sequence, a stimulus task, or a test is treated as shared and re-runs every trace.
 - One build covers one profile; further profiles use `vip gen-profile` and their own evidence file.
 - A width change is a recompile with `+define`; one compile supports one parameter set (VIFC-01).
 - Monitor, driver, and sequence bodies are written by the agent from the worklist; they are not generated.

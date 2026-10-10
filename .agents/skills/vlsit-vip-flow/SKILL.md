@@ -1,6 +1,6 @@
 ---
 name: vlsit-vip-flow
-description: Orchestrate the VLSIT ASIC VIP Design AI Flow end to end with the run-aware `vip` command. Create a numbered run directory, require a VIP specification in the mandatory markdown template, route each stage to its skill, enforce the four sign-off gates, and report honest evidence. Use to build, qualify, and release a SystemVerilog/UVM Verification IP from a protocol or standard specification.
+description: Orchestrate the VLSIT ASIC VIP Design AI Flow end to end with the run-aware `vip` command. Create a numbered run directory, route each stage to its skill, enforce the four sign-off gates, and report honest evidence. Four modes: build a new SystemVerilog/UVM Verification IP from a protocol or standard specification (new), recover a specification from existing VIP code (reverse), fix VIP bugs with selective re-qualification (bugfix), and add features from a user requirement with a port of the implemented VIP (feature).
 ---
 
 # VLSIT ASIC VIP Design AI Flow (orchestrator)
@@ -19,7 +19,18 @@ Use precise scientific and engineering English for skill instructions, technical
 - Never guess a missing input; ask once, concisely. Never overwrite an input, an earlier run, or a user change.
 - Stop at each gate and wait for an explicit `APPROVE`. Record it with `vip gate` only after the user replied.
 
-## Start
+## Choose the mode
+
+| The user has | Mode | Skill | Start |
+|---|---|---|---|
+| a standard or a VIP specification, no VIP yet | `new` | the stage skills below | `vip init <root> <tag> <spec.md>` |
+| VIP code and no (or a stale) specification | `reverse` | `vlsit-vip-code-analyzer` | `vip init <root> <tag> --mode reverse --code <dir>` |
+| a finished VIP (a run, or adopted code) with defects | `bugfix` | `vlsit-vip-bugfix` | `vip init <root> <tag> --mode bugfix --base-run <run>` |
+| a finished VIP and a new requirement | `feature` | `vlsit-vip-feature` | `vip init <root> <tag> --mode feature --base-run <run>` |
+
+A defect that turns out to be a specification error is a feature run. A VIP that was not built by this flow is first brought in by a reverse run; its later runs have layout `external` (no plan, no generated tree; the evidence is the project's regression report; Gate 2 does not apply). `vip next` and `vip brief` follow the mode of the run; the Loop below applies to all modes.
+
+## Start (mode new)
 
 Ask only for what is missing, in one question: the specification (or the standard with roles and profile), the output root, project name, human author, simulator and UVM version, profile to build first, and existing VIP to reuse. Then:
 

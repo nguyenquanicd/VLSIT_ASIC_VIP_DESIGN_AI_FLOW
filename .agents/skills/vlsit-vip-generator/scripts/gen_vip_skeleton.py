@@ -821,6 +821,8 @@ def build(cfg: dict, author: str, project: str, day: str) -> dict[str, str]:
         f"example/{t}_example_top.sv": gen_example_top(c),
         "doc/README.md": gen_readme(c),
         "spec/vip_config.json": json.dumps(cfg, indent=2) + "\n",
+        "spec/vip_generation.json": json.dumps({"schema": "vlsit_vip_generation/1", "author": author, "project": project,
+                                                "date": day, "version": cfg["version"], "profile": cfg["profile"]}, indent=2) + "\n",
     }
     for n, sid in seqs:
         files[f"uvm/seq_lib/{n}.sv"] = gen_seq(c, n, sid)

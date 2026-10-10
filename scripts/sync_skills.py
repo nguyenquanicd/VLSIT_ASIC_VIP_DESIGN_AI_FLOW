@@ -36,6 +36,9 @@ SHARED = {
     "rule_lookup": ("shared/scripts/rule_lookup.py", "scripts"),
     "stage_brief": ("shared/scripts/stage_brief.py", "scripts"),
     "vip_state": ("shared/scripts/vip_state.py", "scripts"),
+    "spec_scaffold": ("shared/scripts/spec_scaffold.py", "scripts"),
+    "vip_impact": ("shared/scripts/vip_impact.py", "scripts"),
+    "vip_change": ("shared/scripts/vip_change.py", "scripts"),
     "vip": ("shared/scripts/vip.py", "scripts"),
     "template": ("spec_template/VLSIT_ASIC_VIP_Specification_Template.md", "references"),
     "rule": ("spec_template/VLSIT_VIP_Design_Rule.md", "references"),
@@ -46,7 +49,7 @@ SHARED = {
 
 # Every skill carries the run-aware command line (vip.py) and the scripts it calls directly.
 COMMON = ["vip_common", "validate", "trace_lint", "check_env", "spec_query", "rule_lookup", "stage_brief",
-          "vip_state", "vip", "rule", "contract"]
+          "vip_state", "spec_scaffold", "vip_impact", "vip_change", "vip", "rule", "contract"]
 MANIFEST = {
     "vlsit-vip-flow": COMMON + ["template", "overview"],
     "vlsit-vip-spec-intake": COMMON + ["template", "apb_example"],
@@ -55,6 +58,9 @@ MANIFEST = {
     "vlsit-vip-generator": COMMON,
     "vlsit-vip-qualifier": COMMON,
     "vlsit-vip-release": COMMON,
+    "vlsit-vip-code-analyzer": COMMON + ["template"],
+    "vlsit-vip-bugfix": COMMON + ["template"],
+    "vlsit-vip-feature": COMMON + ["template"],
 }
 
 

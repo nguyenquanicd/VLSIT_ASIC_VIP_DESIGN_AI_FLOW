@@ -26,14 +26,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vip_common as vc  # noqa: E402
 
 
+_ROWS: dict[str, list[list[str]]] = {}
+_TEXT: dict[str, str] = {}
+
+
 def table(kind: str, rows: list[list[str]]) -> str:
+    rows = _ROWS.get(kind, rows)
     cols = vc.TABLE_SCHEMAS[kind]["columns"]
     out = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     out += ["| " + " | ".join(r) + " |" for r in rows]
     return "\n".join(out)
 
 
-def build(tag: str, title: str, standard: str, guidance: bool) -> str:
+def req_section(key: str, na_default: str) -> str:
+    """A requirements table when rows are supplied for this section, else the N/A paragraph."""
+    rows = _ROWS.get(key)
+    return table("requirements", rows) if rows else na_default
+
+
+def build(tag: str, title: str, standard: str, guidance: bool, rows: dict[str, list[list[str]]] | None = None,
+          text: dict[str, str] | None = None) -> str:
+    """Build the skeleton. `rows` maps a table kind (or requirements_5.2 .. requirements_5.5) to rows that
+    replace the default rows; `text` maps 'purpose' to replacement prose for Section 1.1."""
+    _ROWS.clear()
+    _ROWS.update(rows or {})
+    _TEXT.clear()
+    _TEXT.update(text or {})
     T = tag.upper()
     g = (lambda s: f"\n{s}\n") if guidance else (lambda s: "")
     fm = f'''---
@@ -56,7 +74,7 @@ rtl_rules: "VLSIT_RTL_Design_Rule.md"
                 g("> Scaffold. Format and column meaning: see the template (`spec_template/VLSIT_ASIC_VIP_Specification_Template.md`). "
                   "Replace every `<fill ...>` cell; run `vip validate` and `vip query todo` to see what is left. Paraphrase the standard; cite clauses."),
                 "## 1. Purpose, scope, and context", "### 1.1 Purpose and scope",
-                "<fill: purpose, roles served, and what the VIP provides>\n\n**Included:** <fill: roles, profiles, options, checking, coverage>\n\n**Excluded:** <fill: unsupported features and why>",
+                _TEXT.get("purpose", "<fill: purpose, roles served, and what the VIP provides>") + "\n\n**Included:** <fill: roles, profiles, options, checking, coverage>\n\n**Excluded:** <fill: unsupported features and why>",
                 "### 1.2 Build-or-reuse decision",
                 table("candidates", [["none considered", "not applicable", "unknown", "Build", "<fill: reason>"]]),
                 "### 1.3 Target environment",
@@ -97,10 +115,10 @@ rtl_rules: "VLSIT_RTL_Design_Rule.md"
                 table("timing", [["<fill: cycle or event>", "<fill: condition>", "<fill: observable result>"]]),
                 "## 5. Protocol requirements",
                 g("Requirement conventions: see the template Section 5.1. One behavior per row; the modal verb matches Strength."),
-                "### 5.2 Signal-level requirements", table("requirements", [req_row]),
-                "### 5.3 Sequence and handshake requirements", "N/A: <fill: reason, or replace with a requirements table>",
-                "### 5.4 Transaction-level requirements", "N/A: <fill: reason, or replace with a requirements table>",
-                "### 5.5 Configuration, option, and capability requirements", "N/A: <fill: reason, or replace with a requirements table>",
+                "### 5.2 Signal-level requirements", table("requirements", _ROWS.get("requirements_5.2") or [req_row]),
+                "### 5.3 Sequence and handshake requirements", req_section("requirements_5.3", "N/A: <fill: reason, or replace with a requirements table>"),
+                "### 5.4 Transaction-level requirements", req_section("requirements_5.4", "N/A: <fill: reason, or replace with a requirements table>"),
+                "### 5.5 Configuration, option, and capability requirements", req_section("requirements_5.5", "N/A: <fill: reason, or replace with a requirements table>"),
                 "### 5.6 Boundary analysis",
                 table("boundaries", [["BND-001", "<fill: quantity>", "<fill: unit>", "<fill: min>", "<fill: max>", "<fill: min - 1 or ->",
                                       "<fill: max + 1 or ->", "<fill: spec statement or derivation>", f"VREQ-{T}-0001"]]),

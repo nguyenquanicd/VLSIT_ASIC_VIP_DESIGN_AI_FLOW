@@ -93,6 +93,9 @@ def spec_profile(spec: Path, st: dict, given: str | None) -> str:
 
 
 def main() -> int:
+    for stream in (sys.stdout, sys.stderr):  # code under analysis may hold non-ASCII text; never crash on it
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     argv = sys.argv[1:]
     run_arg = pop_opt(argv, "--run")
     if not argv or argv[0] in ("help", "-h", "--help"):

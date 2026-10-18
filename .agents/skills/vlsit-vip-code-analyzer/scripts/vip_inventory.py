@@ -35,7 +35,7 @@ MAX_BYTES = 1_500_000
 UVM_BASE_KIND = {
     "uvm_agent": "agent", "uvm_driver": "driver", "uvm_monitor": "monitor", "uvm_sequencer": "sequencer",
     "uvm_push_sequencer": "sequencer", "uvm_sequence_item": "item", "uvm_transaction": "item",
-    "uvm_sequence": "sequence", "uvm_env": "env", "uvm_scoreboard": "scoreboard", "uvm_subscriber": "coverage",
+    "uvm_sequence": "sequence", "uvm_env": "env", "uvm_scoreboard": "scoreboard", "uvm_subscriber": "subscriber",
     "uvm_test": "test", "uvm_reg_adapter": "reg_adapter", "uvm_reg_block": "reg_block", "uvm_component": "component",
     "uvm_object": "object",
 }
@@ -156,7 +156,8 @@ def parse_params(header: str) -> list[dict]:
     for part in split_top(header):
         m = re.match(r"(?:(parameter|localparam)\s+)?(?:(?:type|int|integer|string|bit|logic|real|byte|shortint|longint|unsigned|signed)\s*)*(?:\[[^\]]*\]\s*)*([A-Za-z_]\w*)\s*=\s*(.+)$", part.strip(), re.S)
         if m and (m.group(1) or "parameter" in part or "=" in part):
-            out.append({"kind": m.group(1) or "parameter", "name": m.group(2), "default": squash(m.group(3), 120)})
+            default = m.group(3).split(")")[0] if m.group(3).count("(") == 0 else m.group(3)  # cut at the closing paren of the header
+            out.append({"kind": m.group(1) or "parameter", "name": m.group(2), "default": squash(default, 120)})
     return out
 
 
@@ -226,7 +227,9 @@ def scan_unit_body(fs: FileScan, inv: dict, unit: dict, body: str, base: int) ->
         for p in unit["params"]:
             inv["parameters"].append(dict(p, scope=name, file=fs.rel, line=unit["line"]))
         for m in re.finditer(r"\b(parameter|localparam)\s+(?:(?:type|int|integer|string|bit|logic|real)\s+)?(?:\[[^\]]*\]\s*)?([A-Za-z_]\w*)\s*=\s*([^;,]+)", decl_body):
-            inv["parameters"].append({"kind": m.group(1), "name": m.group(2), "default": squash(m.group(3), 120), "scope": name,
+            if any(p["name"] == m.group(2) for p in unit["params"]):
+                continue  # already taken from the unit header
+            inv["parameters"].append({"kind": m.group(1), "name": m.group(2), "default": squash(m.group(3).split(")")[0], 120), "scope": name,
                                       "file": fs.rel, "line": fs.line(base + m.start())})
         unit["signals"] = [s["name"] for s in sigs]
     scan_assertions(fs, inv, name, body, base)
@@ -375,6 +378,9 @@ def classify(inv: dict) -> None:
     for c in inv["classes"]:
         k = kind_of(c["base"], {c["name"]}) if c["base"] else "other"
         c["role_basis"] = "base"
+        if k == "subscriber":
+            n = c["name"].lower()
+            k = "coverage" if (c["has_covergroup"] or "cov" in n) else "predictor" if "pred" in n else "subscriber"
         if k == "other":
             k = name_role(c["name"])
             c["role_basis"] = "name" if k != "other" else "unknown"
